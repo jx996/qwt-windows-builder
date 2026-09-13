@@ -209,7 +209,11 @@ jobs:
               Write-Host "创建 Release $tag（第 $attempt 次尝试）"
               gh release create $tag $env:ARCHIVE --title "$title" --notes-file release-notes.md
             }
-            if ($LASTEXITCODE -eq 0) { $published = $true; break }
+            if ($LASTEXITCODE -eq 0) {
+              # 若为历史失败残留的草稿 Release，正式发布并创建 tag
+              gh release edit $tag --draft=false 2>$null | Out-Null
+              break
+            }
             if ($attempt -lt 5) { Start-Sleep -Seconds (10 * $attempt) }
           }
           if (-not $published) { throw "发布 Release 失败（已重试 5 次）" }
