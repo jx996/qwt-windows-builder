@@ -130,8 +130,9 @@ jobs:
         shell: pwsh
         run: |
           $ver = $env:QWT_VERSION
-          $qt = $env:QT_VERSION -replace "\.", ""
-          $pkg = "qwt-$ver-qt$qt-vs2026-x64"
+          $qt = $env:QT_VERSION
+          # 命名规范: qwt-<QWT版本>-qt<Qt版本>-vs2026-x64-release-debug
+          $pkg = "qwt-$ver-qt$qt-vs2026-x64-release-debug"
           $root = "qwt-$ver"
           New-Item -ItemType Directory -Force `
             -Path "$pkg/include", "$pkg/lib", "$pkg/bin", "$pkg/plugins/designer" | Out-Null
@@ -180,8 +181,8 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          $tag = "qwt-$($env:QWT_VERSION)-qt$($env:QT_VERSION)"
-          $title = "QWT $env:QWT_VERSION (Qt $env:QT_VERSION, VS2026 x64)"
+          $tag = "qwt-$($env:QWT_VERSION)-qt$($env:QT_VERSION)-vs2026-x64"
+          $title = "QWT $env:QWT_VERSION (Qt $env:QT_VERSION, VS2026 x64, Release + Debug)"
           $notes = @(
             "QWT $env:QWT_VERSION 自动化编译产物（GitHub Actions）",
             "",

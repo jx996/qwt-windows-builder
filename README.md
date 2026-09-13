@@ -18,15 +18,15 @@
 | `build_examples` | 是否同时编译 examples / playground / tests | `false` |
 
 3. 运行完成后，在仓库 **Releases** 页面下载编译产物：
-   `qwt-<版本>-qt<Qt版本>-vs2026-x64.7z`
+   `qwt-<QWT版本>-qt<Qt版本>-vs2026-x64-release-debug.7z`
 
 推送代码到 `main` 分支也会自动触发一次默认参数构建（作为冒烟测试）。
 
 ## 编译产物结构
 
 ```
-qwt-6.3.0-qt683-vs2026-x64.7z
-└── qwt-6.3.0-qt683-vs2026-x64/
+qwt-6.3.0-qt6.8.3-vs2026-x64-release-debug.7z
+└── qwt-6.3.0-qt6.8.3-vs2026-x64-release-debug/
     ├── include/            # 全部 QWT 头文件
     ├── lib/                # 导入库（qwt.lib / qwtd.lib）
     ├── bin/                # 运行时 DLL + PDB（qwt.dll / qwtd.dll）
@@ -43,10 +43,28 @@ qwt-6.3.0-qt683-vs2026-x64.7z
 - **7-Zip**（缺失时经 Chocolatey 安装）
 - **Qt**（`jurplel/install-qt-action` 带 GitHub Actions 缓存，未命中时经 aqtinstall 自动安装）
 
-## Release 命名规范
+## 命名规范
 
-- Tag / Release：`qwt-<QWT版本>-qt<Qt版本>`（如 `qwt-6.3.0-qt6.8.3`）
-- 资产文件：`qwt-<QWT版本>-qt<Qt主次版本>-vs2026-x64.7z`（如 `qwt-6.3.0-qt683-vs2026-x64.7z`）
+统一采用「全小写 + 连字符分隔 + 版本号保留小数点」的语义化命名：
+
+```
+qwt-<QWT_VERSION>-qt<QT_VERSION>-vs2026-x64-release-debug.7z
+```
+
+| 组成部分 | 说明 | 示例 |
+| --- | --- | --- |
+| `qwt` | 库名（小写） | `qwt` |
+| `6.3.0` | QWT 版本 | `6.3.0` |
+| `qt6.8.3` | 编译所用的 Qt 版本 | `qt6.8.3` |
+| `vs2026` | 工具链（Visual Studio 2026 / MSVC） | `vs2026` |
+| `x64` | 目标架构 | `x64` |
+| `release-debug` | 包内含 Release 与 Debug 两种配置 | `release-debug` |
+
+据此，同一个版本会得到：
+
+- Release tag / 名称：`qwt-6.3.0-qt6.8.3-vs2026-x64`
+- 资产文件：`qwt-6.3.0-qt6.8.3-vs2026-x64-release-debug.7z`
+- 压缩包内根目录：`qwt-6.3.0-qt6.8.3-vs2026-x64-release-debug/`
 
 同一 tag 重复构建会覆盖上传同名资产。
 
