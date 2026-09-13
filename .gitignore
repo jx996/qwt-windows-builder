@@ -1,0 +1,5 @@
+# 构建中间产物
+qwt-*.zip
+qwt-*/
+*.7z
+release-notes.md

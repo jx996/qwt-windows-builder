@@ -1,0 +1,209 @@
+name: Build QWT (Windows / Qt / MSVC x64)
+
+on:
+  workflow_dispatch:
+    inputs:
+      qwt_version:
+        description: "QWT 版本，例如 6.3.0；填 latest 自动识别 SourceForge 最新版本"
+        required: false
+        default: "6.3.0"
+      qt_version:
+        description: "Qt 版本，例如 6.8.3"
+        required: false
+        default: "6.8.3"
+      qt_arch:
+        description: "Qt 编译套件（aqt 架构名）"
+        required: false
+        default: "win64_msvc2022_64"
+      build_examples:
+        description: "是否同时编译 examples / playground / tests（true / false，默认仅编译库）"
+        required: false
+        default: "false"
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: "QWT ${{ inputs.qwt_version || '6.3.0' }} / Qt ${{ inputs.qt_version || '6.8.3' }} / VS2026 x64"
+    runs-on: windows-latest
+    env:
+      QT_VERSION: ${{ inputs.qt_version || '6.8.3' }}
+      QT_ARCH: ${{ inputs.qt_arch || 'win64_msvc2022_64' }}
+      BUILD_EXAMPLES: ${{ inputs.build_examples || 'false' }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: 解析 QWT 版本（latest 自动识别最新版）
+        shell: pwsh
+        run: |
+          $ver = "${{ inputs.qwt_version || '6.3.0' }}"
+          if ($ver -eq "latest") {
+            Write-Host "正在从 SourceForge 识别最新 QWT 版本..."
+            $rss = curl.exe -sL "https://sourceforge.net/projects/qwt/rss?path=/qwt"
+            $versions = [regex]::Matches($rss, "qwt-(\d+\.\d+\.\d+)\.zip") |
+              ForEach-Object { $_.Groups[1].Value } |
+              Sort-Object -Property { [version]$_ } -Unique
+            if ($versions.Count -eq 0) { throw "无法从 SourceForge 识别最新 QWT 版本" }
+            $ver = $versions[-1]
+          }
+          Write-Host "QWT 版本: $ver"
+          "QWT_VERSION=$ver" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+
+      - name: 检测 / 自动安装 MSVC x64 编译工具链
+        shell: pwsh
+        run: |
+          $vswhere = Join-Path ${env:ProgramFiles(x86)} "Microsoft Visual Studio\Installer\vswhere.exe"
+          $vsPath = & $vswhere -latest -products * `
+            -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 `
+            -property installationPath
+          if ($vsPath) {
+            Write-Host "已检测到 Visual Studio: $vsPath"
+          } else {
+            Write-Host "未检测到 MSVC x64 工具集，正在自动安装 VS2026 C++ 工具链..."
+            choco install visualstudio2026-workload-vctools -y --no-progress
+          }
+
+      - name: 检测 / 自动安装 7-Zip
+        shell: pwsh
+        run: |
+          $sz = @("$env:ProgramFiles\7-Zip\7z.exe", "${env:ProgramFiles(x86)}\7-Zip\7z.exe") |
+            Where-Object { Test-Path $_ } | Select-Object -First 1
+          if (-not $sz) {
+            Write-Host "未检测到 7-Zip，正在自动安装..."
+            choco install 7zip -y --no-progress
+            $sz = "$env:ProgramFiles\7-Zip\7z.exe"
+          }
+          Write-Host "7-Zip: $sz"
+          "SEVENZIP=$sz" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+
+      - name: 检测 / 自动安装 Qt（带缓存）
+        uses: jurplel/install-qt-action@v4
+        with:
+          version: ${{ env.QT_VERSION }}
+          arch: ${{ env.QT_ARCH }}
+          cache: true
+
+      - name: 配置 MSVC x64 编译环境
+        uses: ilammy/msvc-dev-cmd@v1
+        with:
+          arch: x64
+
+      - name: 下载并解压 QWT 源码
+        shell: pwsh
+        run: |
+          $ver = $env:QWT_VERSION
+          $url = "https://sourceforge.net/projects/qwt/files/qwt/$ver/qwt-$ver.zip/download"
+          Write-Host "下载: $url"
+          curl.exe -sSL -o "qwt-$ver.zip" $url
+          if (!(Test-Path "qwt-$ver.zip") -or (Get-Item "qwt-$ver.zip").Length -lt 1MB) {
+            throw "QWT $ver 源码包下载失败（版本号可能不存在）"
+          }
+          & "$env:SEVENZIP" x "qwt-$ver.zip" -y | Out-Null
+          if (!(Test-Path "qwt-$ver")) { throw "QWT 源码解压失败" }
+
+      - name: 配置 QWT 构建选项
+        shell: pwsh
+        run: |
+          $cfg = "qwt-$($env:QWT_VERSION)/qwtconfig.pri"
+          if ($env:BUILD_EXAMPLES -ne "true") {
+            (Get-Content $cfg) |
+              ForEach-Object { $_ -replace "^\s*QWT_CONFIG\s*\+=\s*(QwtExamples|QwtPlayground|QwtTests)\s*$", "# CI disabled: `$_" } |
+              Set-Content $cfg
+            Write-Host "已禁用 examples / playground / tests（build_examples=false）"
+          }
+
+      - name: 编译（release + debug 动态库）
+        shell: pwsh
+        run: |
+          cd "qwt-$($env:QWT_VERSION)"
+          qmake qwt.pro
+          nmake
+          if ($LASTEXITCODE -ne 0) { throw "nmake 编译失败（exit=$LASTEXITCODE）" }
+
+      - name: 收集编译产物
+        shell: pwsh
+        run: |
+          $ver = $env:QWT_VERSION
+          $qt = $env:QT_VERSION -replace "\.", ""
+          $pkg = "qwt-$ver-qt$qt-vs2026-x64"
+          $root = "qwt-$ver"
+          New-Item -ItemType Directory -Force `
+            -Path "$pkg/include", "$pkg/lib", "$pkg/bin", "$pkg/plugins/designer" | Out-Null
+
+          # 头文件
+          Copy-Item "$root/src/*.h" "$pkg/include/" -Force
+          if (Test-Path "$root/include") {
+            Copy-Item "$root/include/*" "$pkg/include/" -Force -ErrorAction SilentlyContinue
+          }
+
+          # 库文件：导入库(.lib) -> lib，运行时(.dll/.pdb) -> bin
+          Copy-Item "$root/lib/qwt*.lib" "$pkg/lib/" -Force -ErrorAction SilentlyContinue
+          Copy-Item "$root/lib/qwt*.dll" "$pkg/bin/" -Force -ErrorAction SilentlyContinue
+          Copy-Item "$root/lib/qwt*.pdb" "$pkg/bin/" -Force -ErrorAction SilentlyContinue
+
+          # Designer 插件（self-contained，release 版）
+          foreach ($p in @("$root/plugins/designer", "$root/designer/plugins/designer")) {
+            if (Test-Path $p) {
+              Copy-Item "$p/qwt*" "$pkg/plugins/designer/" -Force -ErrorAction SilentlyContinue
+            }
+          }
+
+          Write-Host "---- 产物清单 ----"
+          Get-ChildItem $pkg -Recurse -File | ForEach-Object { Write-Host $_.FullName.Substring((Get-Location).Path.Length + 1) }
+          "PKG_DIR=$pkg" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+
+      - name: 打包为 7z
+        shell: pwsh
+        run: |
+          $archive = "$($env:PKG_DIR).7z"
+          & "$env:SEVENZIP" a -t7z -mx=9 $archive $env:PKG_DIR | Out-Null
+          if (!(Test-Path $archive)) { throw "7z 打包失败" }
+          $mb = [math]::Round((Get-Item $archive).Length / 1MB, 2)
+          Write-Host "打包完成: $archive ($mb MB)"
+          "ARCHIVE=$archive" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+
+      - name: 上传构建 Artifact（备份）
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ env.PKG_DIR }}
+          path: ${{ env.PKG_DIR }}.7z
+          retention-days: 14
+
+      - name: 发布到 GitHub Release
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $tag = "qwt-$($env:QWT_VERSION)-qt$($env:QT_VERSION)"
+          $title = "QWT $env:QWT_VERSION (Qt $env:QT_VERSION, VS2026 x64)"
+          $notes = @(
+            "QWT $env:QWT_VERSION 自动化编译产物（GitHub Actions）",
+            "",
+            "| 项目 | 值 |",
+            "| --- | --- |",
+            "| QWT 版本 | $env:QWT_VERSION |",
+            "| Qt 版本 | $env:QT_VERSION ($env:QT_ARCH) |",
+            "| 编译器 | Visual Studio 2026, MSVC x64 |",
+            "| 配置 | Release + Debug, 动态链接 (qwt.dll / qwtd.dll) |",
+            "",
+            "包内目录：",
+            "- ``include/`` 头文件",
+            "- ``lib/`` 导入库（qwt.lib / qwtd.lib）",
+            "- ``bin/`` 运行时 DLL 与 PDB（qwt.dll / qwtd.dll）",
+            "- ``plugins/designer/`` Qt Designer 插件"
+          ) | Set-Content -Path "release-notes.md" -Encoding utf8
+
+          gh release view $tag 2>$null | Out-Null
+          if ($LASTEXITCODE -eq 0) {
+            Write-Host "Release $tag 已存在，覆盖上传资产"
+            gh release upload $tag $env:ARCHIVE --clobber
+          } else {
+            gh release create $tag $env:ARCHIVE --title "$title" --notes-file release-notes.md
+          }
+          if ($LASTEXITCODE -ne 0) { throw "发布 Release 失败" }
