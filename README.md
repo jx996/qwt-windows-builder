@@ -27,6 +27,7 @@
 ```
 qwt-6.3.0-qt6.8.3-vs2026-x64-release-debug.7z
 └── qwt-6.3.0-qt6.8.3-vs2026-x64-release-debug/
+    ├── COPYING             # Qwt License 1.0 官方全文（随产物分发）
     ├── include/            # 全部 QWT 头文件
     ├── lib/                # 导入库（qwt.lib / qwtd.lib）
     ├── bin/                # 运行时 DLL + PDB（qwt.dll / qwtd.dll）
@@ -70,5 +71,11 @@ qwt-<QWT_VERSION>-qt<QT_VERSION>-vs2026-x64-release-debug.7z
 
 ## 许可
 
-QWT 遵循 [The Qwt License](https://qwt.sourceforge.io/qwtlicense.html)（LGPL 例外条款）。
-本仓库仅包含 CI 构建脚本，不包含 QWT 源码；源码在构建时从 SourceForge 官方地址下载。
+本仓库自身内容（CI 工作流、文档等）采用 **MIT License**，见 [LICENSE](LICENSE)。
+
+编译产物属于 QWT 的二进制分发，遵循 **The Qwt License, Version 1.0**
+（GNU LGPL 附例外条款），官方全文：<https://qwt.sourceforge.io/qwtlicense.html>。
+工作流在打包时会把 QWT 官方 `COPYING` 一并放入压缩包根目录，随产物分发。
+本仓库不包含、不分发 QWT 源码——源码在每次构建时从 SourceForge 官方地址实时下载。
+
+各依赖的许可与合规要点详见 [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md)。

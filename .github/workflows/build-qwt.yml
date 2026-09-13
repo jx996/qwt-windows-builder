@@ -137,6 +137,9 @@ jobs:
           New-Item -ItemType Directory -Force `
             -Path "$pkg/include", "$pkg/lib", "$pkg/bin", "$pkg/plugins/designer" | Out-Null
 
+          # 许可合规：随产物附带 QWT 官方许可全文（Qwt License 1.0）
+          Copy-Item "$root/COPYING" "$pkg/COPYING" -Force -ErrorAction SilentlyContinue
+
           # 头文件
           Copy-Item "$root/src/*.h" "$pkg/include/" -Force
           if (Test-Path "$root/include") {
@@ -197,7 +200,10 @@ jobs:
             "- ``include/`` 头文件",
             "- ``lib/`` 导入库（qwt.lib / qwtd.lib）",
             "- ``bin/`` 运行时 DLL 与 PDB（qwt.dll / qwtd.dll）",
-            "- ``plugins/designer/`` Qt Designer 插件"
+            "- ``plugins/designer/`` Qt Designer 插件",
+            "- ``COPYING`` Qwt License 1.0 官方全文",
+            "",
+            "许可：QWT 二进制遵循 The Qwt License 1.0（LGPL 附例外条款），详见包内 ``COPYING``。"
           ) | Set-Content -Path "release-notes.md" -Encoding utf8
 
           $published = $false
