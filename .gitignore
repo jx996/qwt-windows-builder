@@ -3,3 +3,6 @@ qwt-*.zip
 qwt-*/
 *.7z
 release-notes.md
+
+# WorkBuddy 本地数据
+.workbuddy/
